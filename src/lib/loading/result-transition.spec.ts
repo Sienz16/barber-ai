@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldUseIncomingResult } from './result-transition';
+import { getStepAfterSubmitResult, shouldUseIncomingResult } from './result-transition';
 
 describe('shouldUseIncomingResult', () => {
 	it('ignores stale result while waiting for a fresh generation', () => {
@@ -31,5 +31,34 @@ describe('shouldUseIncomingResult', () => {
 		});
 
 		expect(shouldAccept).toBe(false);
+	});
+});
+
+describe('getStepAfterSubmitResult', () => {
+	it('returns to preview when submission fails while loading', () => {
+		const nextStep = getStepAfterSubmitResult({
+			currentStep: 'loading',
+			actionResultType: 'failure'
+		});
+
+		expect(nextStep).toBe('preview');
+	});
+
+	it('returns to preview when submission throws while loading', () => {
+		const nextStep = getStepAfterSubmitResult({
+			currentStep: 'loading',
+			actionResultType: 'error'
+		});
+
+		expect(nextStep).toBe('preview');
+	});
+
+	it('keeps current step when submission succeeds', () => {
+		const nextStep = getStepAfterSubmitResult({
+			currentStep: 'loading',
+			actionResultType: 'success'
+		});
+
+		expect(nextStep).toBe('loading');
 	});
 });

@@ -4,8 +4,9 @@
 
 	import ResultCollage from '$lib/components/result-collage.svelte';
 	import SuggestionCard from '$lib/components/suggestion-card.svelte';
+	import { getDownscaledDimensions, getMobileCaptureJpegQuality } from '$lib/image/capture-prep';
 	import { getGenerationStage } from '$lib/loading/generation-stages';
-	import { shouldUseIncomingResult } from '$lib/loading/result-transition';
+	import { getStepAfterSubmitResult, shouldUseIncomingResult } from '$lib/loading/result-transition';
 	import type { GenerationResult } from '$lib/types/haircut';
 
 	type ActionForm = {
@@ -33,6 +34,7 @@
 
 	const STAGE_ONE_DURATION_MS = 4500;
 	const STAGE_TWO_PROGRESS_DURATION_MS = 9000;
+	const MAX_CAPTURE_DIMENSION = 1280;
 	let generationIntervalId: ReturnType<typeof setInterval> | null = null;
 
 	let actionForm = $derived(form as ActionForm | undefined);
@@ -104,11 +106,20 @@
 	function capturePhoto() {
 		if (!videoEl) return;
 		const canvas = document.createElement('canvas');
-		canvas.width = videoEl.videoWidth;
-		canvas.height = videoEl.videoHeight;
+		const targetDimensions = getDownscaledDimensions({
+			width: videoEl.videoWidth,
+			height: videoEl.videoHeight,
+			maxDimension: MAX_CAPTURE_DIMENSION
+		});
+		canvas.width = targetDimensions.width;
+		canvas.height = targetDimensions.height;
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
-		ctx.drawImage(videoEl, 0, 0);
+		ctx.drawImage(videoEl, 0, 0, videoEl.videoWidth, videoEl.videoHeight, 0, 0, canvas.width, canvas.height);
+		const quality = getMobileCaptureJpegQuality({
+			width: videoEl.videoWidth,
+			height: videoEl.videoHeight
+		});
 		canvas.toBlob(
 			(blob) => {
 				if (!blob) return;
@@ -119,7 +130,7 @@
 				currentStep = 'preview';
 			},
 			'image/jpeg',
-			0.96
+			quality
 		);
 	}
 
@@ -325,11 +336,20 @@
 						startGenerationTimer();
 						resultImageUrlAtSubmit = result?.imageUrl ?? null;
 						currentStep = 'loading';
-						return async ({ update }) => {
+						return async ({ result, update }) => {
 							try {
 								await update();
 							} catch (e) {
 								console.error(e);
+							}
+
+							const nextStep = getStepAfterSubmitResult({
+								currentStep,
+								actionResultType: result.type
+							});
+							currentStep = nextStep;
+							if (nextStep !== 'loading') {
+								clearGenerationTimer();
 							}
 						};
 					}}
